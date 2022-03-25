@@ -29,51 +29,53 @@ const hey = async push => {
 
 
 		if(result?.success) {
-			G.info('主线', '推送~[通知]', `✔ `);
+			G.debug('主线', '推送', `✔ `);
 		}
 		else {
 			throw Error(result?.message);
 		}
 	}
 	catch(error) {
-		G.error('主线', '推送~[通知]', `✖ ${error?.message ?? error}`);
+		G.error('主线', '推送', `✖ ${error?.message ?? error}`);
 	}
 };
 
 
 const run = async () => {
-	const versionsNew = [];
+	for(const namePackage of Object.keys(C.version)) {
+		const majors = C.version[namePackage];
 
-	for(const major of Object.keys(C.version)) {
-		try {
-			const version = await LatestVersion('pnpm', { version: `^${major}` });
+		for(const major in majors) {
+			try {
+				const version = await LatestVersion(namePackage, { version: `^${major}` });
+
+				if(!majors[major].includes(version)) {
+					hey({
+						title: `嘿！${namePackage} 有新版本啦！`,
+						body: `v${version}`,
+						data: `https://www.npmjs.com/package/${namePackage}`,
+						tag: `${PKG.name} ${namePackage} v${major}`
+					});
 
 
-			if(version && !C.version[major].includes(version)) {
-				versionsNew.unshift(version);
+					C.__edit('version', packages => packages[namePackage][major].unshift(version));
 
-				hey({
-					title: `嘿！pnpm 有新版本啦！`,
-					body: `v${version}`,
-					data: 'https://www.npmjs.com/package/pnpm',
-					tag: `${PKG.name} v${major}`
-				});
 
-				C.__edit('version', versions => versions[major].unshift(version));
-
-				G.info('主线', '监视PNPM版本', `✔ 发现新~[版本]~{v${version}}`);
+					G.info('士大夫', `~[${namePackage}] v${major}.x`, `✔ 发现新~[版本]~{v${version}}`);
+				}
+				else {
+					G.info('士大夫', `~[${namePackage}] v${major}.x`, `○ 暂无新~[版本]`);
+				}
+			}
+			catch(error) {
+				if(error?.name == 'VersionNotFoundError') {
+					G.warn('士大夫', `~[${namePackage}] v${major}.x`, `✖ 该主线暂无~[版本]`);
+				}
+				else {
+					G.error('士大夫', `~[${namePackage}] v${major}.x`, `✖ ${error?.message ?? error}`);
+				}
 			}
 		}
-		catch(error) {
-			G.error('主线', '监视PNPM版本', `✖ ${error?.message ?? error}`);
-		}
-	}
-
-	if(versionsNew.length) {
-		G.info('主线', '监视PNPM版本', `✔ 发现新~[版本]`, ...versionsNew.map(version => `~{v${version}}`));
-	}
-	else {
-		G.info('主线', '监视PNPM版本', `○ 暂未新~[版本]`);
 	}
 };
 
