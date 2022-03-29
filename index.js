@@ -1,78 +1,53 @@
 import './lib/init.js';
 
-import { publicEncrypt } from 'crypto';
-
-import Axios from 'axios';
 import LatestVersion from 'latest-version';
 
+import StaffWock from '@hey/hey-staff-wock';
+
+import PKG from './lib/global/package.js';
 import C from './lib/global/config.js';
 import G from './lib/global/log.js';
-import PKG from './lib/global/package.js';
 
 
-if(!~~C.interval || ~~C.interval < 1000) { throw Error('间隔无效或小于一秒'); }
+if(!C.version) { C.$.edit('version', () => ({})); }
 
 
-const hey = async push => {
-	try {
-		const { data: result } = await Axios.post(`http://${C.target.host}:${C.target.port}/api/hey/push`, {
-			from: publicEncrypt(
-				C.publicKey.from,
-				Buffer.from(JSON.stringify({ who: C.id, app: PKG.name, }))
-			).toString('base64'),
-
-			data: publicEncrypt(
-				C.publicKey.data,
-				Buffer.from(JSON.stringify(push))
-			).toString('base64')
-		}, { timeout: 1000 * 30 });
+const staff = async hey => {
+	for(const pack in C.push.package) {
+		if(!C.version[pack]) { C.$.edit('version', packagesAll => (packagesAll[pack] = {}) && void 0); }
 
 
-		if(result?.success) {
-			G.debug('主线', '推送', `✔ `);
-		}
-		else {
-			throw Error(result?.message);
-		}
-	}
-	catch(error) {
-		G.error('主线', '推送', `✖ ${error?.message ?? error}`);
-	}
-};
+		for(const major of C.push.package[pack]) {
+			if(!C.version[pack][major]) { C.$.edit('version', packagesAll => (packagesAll[pack][major] = []) && void 0); }
 
 
-const run = async () => {
-	for(const namePackage of Object.keys(C.version)) {
-		const majors = C.version[namePackage];
-
-		for(const major in majors) {
 			try {
-				const version = await LatestVersion(namePackage, { version: `^${major}` });
+				const version = await LatestVersion(pack, { version: `^${major}` });
 
-				if(!majors[major].includes(version)) {
+
+				if(!C.version[pack][major].includes(version)) {
+					C.$.edit('version', packagesAll => packagesAll[pack][major].unshift(version) && void 0);
+
+
+					G.info('士大夫', `~[${pack}] v${major}.x`, `✔ 发现新~[版本]~{v${version}}`);
+
 					hey({
-						title: `嘿！${namePackage} 有新版本啦！`,
+						title: `嘿！${pack} 有新版本啦！`,
 						body: `v${version}`,
-						data: `https://www.npmjs.com/package/${namePackage}`,
-						tag: `${PKG.name} ${namePackage} v${major}`
+						data: `https://www.npmjs.com/package/${pack}`,
+						tag: `${PKG.name} ${pack} v${major}`
 					});
-
-
-					C.__edit('version', packages => packages[namePackage][major].unshift(version));
-
-
-					G.info('士大夫', `~[${namePackage}] v${major}.x`, `✔ 发现新~[版本]~{v${version}}`);
 				}
 				else {
-					G.info('士大夫', `~[${namePackage}] v${major}.x`, `○ 暂无新~[版本]`);
+					G.info('士大夫', `~[${pack}] v${major}.x`, `○ 暂无新~[版本]`);
 				}
 			}
 			catch(error) {
 				if(error?.name == 'VersionNotFoundError') {
-					G.warn('士大夫', `~[${namePackage}] v${major}.x`, `✖ 该主线暂无~[版本]`);
+					G.warn('士大夫', `~[${pack}] v${major}.x`, `✖ 该主线暂无~[版本]`);
 				}
 				else {
-					G.error('士大夫', `~[${namePackage}] v${major}.x`, `✖ ${error?.message ?? error}`);
+					G.error('士大夫', `~[${pack}] v${major}.x`, `✖ ${error?.message ?? error}`);
 				}
 			}
 		}
@@ -81,5 +56,30 @@ const run = async () => {
 
 
 
-run();
-setInterval(run, C.interval);
+const wockStaff = new StaffWock(
+	C.target,
+	PKG.name, C.auth.id,
+	C.auth.who, C.auth.token,
+	C.push.interval, staff,
+	(...params) => G.info('Wock', '信息', ...params),
+	(...params) => G.error('Wock', '错误', ...params),
+);
+
+
+wockStaff.add('auth-successful', () => G.info('~[Hey]通讯', '认证', '✔ '));
+wockStaff.add('auth-failed', error => G.error('~[Hey]通讯', '认证', `✖ ${error.message ?? error}`));
+wockStaff.add('staff-start', () => G.info('~[Hey]通讯', '开始~[工作]', '✔ '));
+wockStaff.add('staff-stop', () => G.info('~[Hey]通讯', '停止~[工作]', '✔ '));
+
+wockStaff.add('set-auth', (id, who, token) => C.$.edit('auth', auth => {
+	G.info('~[Hey]通讯', '更新~[认证信息]', '✔ ',
+		`~[id]~{${id}}`,
+		`~[who]~{${who}}`,
+		`~[token]~{${token}}`,
+	);
+
+	return { id, who, token };
+}));
+
+
+wockStaff.open();
