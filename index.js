@@ -31,11 +31,12 @@ const staff = async hey => {
 
 					G.info('士大夫', `~[${pack}] v${major}.x`, `✔ 发现新~[版本]~{v${version}}`);
 
+
 					hey({
-						title: `嘿！${pack} 有新版本啦！`,
+						title: `${pack} 有新版本啦！`,
 						body: `v${version}`,
 						data: `https://www.npmjs.com/package/${pack}`,
-						tag: `${PKG.name} ${pack} v${major}`
+						tag: `v${major}`
 					});
 				}
 				else {
